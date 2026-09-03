@@ -6,7 +6,20 @@ dotenv.config();
 
 const app = express();
 
-app.use(express.json());
+// On Vercel, the platform's Node.js runtime pre-parses JSON/urlencoded
+// request bodies into `req.body` *before* our function is invoked, having
+// already fully consumed the underlying stream. If we then let
+// express.json() try to read that same (already-drained) stream again, the
+// request hangs until Vercel's timeout — which shows up on the client as a
+// generic "could not reach the server" network failure, not a clean error.
+// Locally (tsx/node), Vercel isn't in the loop, so req.body is never
+// pre-populated and express.json() runs exactly as normal.
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+    return next();
+  }
+  express.json()(req, res, next);
+});
 
 // ---- Dashboard login (protects the whole app, not Reddit itself) ----
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || '';
